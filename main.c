@@ -94,6 +94,7 @@ void parse_commandline_options( int _argc,  char** _argv,
     printf("\n");
 }
 
+/*
 void distribute(int _num_nodes, int *_target_node, struct element _current_element)
 {
     char key_first_byte;
@@ -101,6 +102,61 @@ void distribute(int _num_nodes, int *_target_node, struct element _current_eleme
     
     *_target_node = (int)((int)key_first_byte / _num_nodes);   
 }
+*/
+
+int key_compare(struct element a, struct element b)
+{
+    int i, ia, ib;
+    for(i = 0; i < 10; i++)
+    {
+        ia = (int)a.e[i];
+        ib = (int)b.e[i];
+        if (ia < ib) {
+            return(1);
+        }
+        if (ia > ib) {
+            return(0);
+        }
+    }
+    return(2);
+}
+
+void quickSort(struct element data[], long left, long right)
+{
+    struct element temp = data[left];
+    long ptr = left;
+    long i = left + 1, j = right;
+    
+    if(key_compare(data[i], temp))
+    {
+        data[ptr] = data[i];
+        ptr = i;
+    }
+    while(i!=j)
+    {
+        if(!key_compare(data[i], temp))
+        {
+            j--;
+        }
+        else
+        {
+            data[ptr] = data[j];
+            ptr = j;
+            while(key_compare(data[i], temp) && i != j)
+            {
+                i++;
+            }
+            data[ptr] = data[i];
+            ptr = i;
+        }
+    }
+    data[ptr] = temp;
+    if(left < ptr - 1)
+        quickSort(data, left, ptr - 1);
+    if(ptr + 1 < right)
+        quickSort(data, ptr + 1, right);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,6 +188,11 @@ int main(int argc, char* argv[]) {
     sprintf(gensort_fname, "partition.%d", my_rank);
     sprintf(arg_bN, " -b%d", (my_rank*1000));
     sprintf(arg_NUMRECS, " %d ", (my_rank*1000 + 1000));
+
+    
+    // CAUTION!!!
+    // CAUTION!!!
+    // CAUTION!!!
 
     strcpy(system_call, "/Users/hawkwoodye/NetBeansProjects/gensort-1.4/gensort ");
     strcat(system_call, arg_bN);
@@ -249,6 +310,7 @@ int main(int argc, char* argv[]) {
     char            temp_key;
     long            temp_bucket_index;
     int             target_node;
+    int             probe_flag;
     
     for(i = 0; i < prog_info.element_count; i++)
     {
@@ -270,7 +332,7 @@ int main(int argc, char* argv[]) {
         }
         // MPI RECV
         for (j = 0; j < num_process; j++) {
-            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_status))
+            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_flag, &probe_status))
             {
                 MPI_Recv(&final_distributed_records[final_index], (bucket_element_count * 100), MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
                 final_index = final_index + bucket_element_count;
@@ -291,7 +353,7 @@ int main(int argc, char* argv[]) {
         {
             int count = 0;
             
-            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_status))
+            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_flag, &probe_status))
             {
                 MPI_Get_count( &probe_status, MPI_BYTE, &count);
                 MPI_Recv(&final_distributed_records[final_index], count, MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
@@ -305,9 +367,28 @@ int main(int argc, char* argv[]) {
     //                                        //
     ////////////////////////////////////////////
 
+    //Barrier()
+    MPI_Barrier(MPI_COMM_WORLD);
+    
     // sort final_distributed_records
+    quickSort(final_distributed_records, 0, (prog_info.element_count - 1) );
     
     // write to disk
+    FILE *outFile;
+    
+    char output_file_name[57]="./sorted_";
+    strcat(output_file_name, gensort_fname);
+    
+    /* open the file we are writing to */
+    if(!(outFile = fopen(output_file_name, "wb")))
+    {
+        print_usage_error_exit("File writing error!\n");
+    }
+    
+    /* use fwrite to write binary data to the file */
+    fwrite(final_distributed_records, prog_info.input_file_size , 1, outFile);
+    
+    fclose(outFile);
     
     /* shut down MPI */
     MPI_Finalize(); 
