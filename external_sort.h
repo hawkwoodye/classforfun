@@ -19,16 +19,16 @@ extern "C" {
 
 struct program_information
 {
-    const char* input_file_name;      // input file name
+    char        input_file_name[50];      // input file name
     long        input_file_size;           // input file size in bytes
     
     int         element_byte_size;      // 100 bytes
     long        element_count;
     long        element_key_size;       // 10 bytes
     
-    int         fileIO_threads;           // number of read or write nodes
-    int         distribute_threads;       // number of distribute nodes
-    int         communicate_threads;      // number of send or receive nodes
+    long        fileIO_threads;           // number of read or write nodes
+    long        distribute_threads;       // number of distribute nodes
+    long        communicate_threads;      // number of send or receive nodes
     
     long        fileIO_buffer_byte_size;        // byte size of buffer pool for file IO
     long        ditribute_buffer_byte_size;     // byte size of buffer pool for distribute read buffer
@@ -57,7 +57,7 @@ struct ditribute_bucket
 
 struct sort_buffer
 {
-    int sorted_flag = 0;
+    int sorted_flag;
     long current_size;
     struct element *e;
 };
