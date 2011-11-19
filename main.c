@@ -112,6 +112,7 @@ int main(int argc, char* argv[]) {
     
     // MPI Initialization
     MPI_Status status ;   /* return status for receive */
+    MPI_Status probe_status;    /* return status for probe */
    
     /* start up MPI */
     MPI_Init(&argc, &argv);
@@ -224,26 +225,79 @@ int main(int argc, char* argv[]) {
     // ...
     //
     
-    struct element * distributed_all_records[num_process];
-    distributed_all_records = (struct element *)malloc(prog_info.input_file_size);
+    // buffers for sending
+    struct element *    sending_buckets[num_process];
+    long                buckets_index[num_process];
+    // buffer for receiving
+    struct element *    final_distributed_records;
+    long                final_index;
+    
+    // bucket size in count of element, will be changed later, right now it is the total element count, which will not be reached
+    long                bucket_element_count;
+    
+    bucket_element_count = prog_info.element_count ;
+    
+    for(i = 0; i < num_process; i++)
+    {
+        sending_buckets[i] = (struct element *)malloc(bucket_element_count * prog_info.element_byte_size );
+        buckets_index[i]   = 0;
+    }
+    
     long count_of_dist_records = prog_info.element_count;
     
-    struct element temp_record;
-    char temp_key;
-    int target_node;
+    struct element  temp_record;
+    char            temp_key;
+    long            temp_bucket_index;
+    int             target_node;
     
     for(i = 0; i < prog_info.element_count; i++)
     {
         temp_record = records_per_buffer[i];
         temp_key = temp_record.e[0];
         target_node = (int)temp_key;
-        
         target_node = target_node / num_process;
+        temp_bucket_index = buckets_index[target_node];
         
+        sending_buckets[target_node][temp_bucket_index] = temp_record;
+        buckets_index[target_node]++;
         
-        
+        // when one bucket is full send it and memset to zero
+        if(buckets_index[target_node] == bucket_element_count)
+        {
+            // MPI SEND
+            MPI_Send(sending_buckets[target_node], (bucket_element_count * 100), MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
+            buckets_index[target_node] = 0;
+        }
+        // MPI RECV
+        for (j = 0; j < num_process; j++) {
+            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_status))
+            {
+                MPI_Recv(&final_distributed_records[final_index], (bucket_element_count * 100), MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
+                final_index = final_index + bucket_element_count;
+            }
+        }
     }
     
+    // last time send those unfilled buckects
+    for(i = 0; i < num_process; i++)
+    {
+        if(buckets_index[i]!=0)
+        {
+            //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
+            MPI_Send(sending_buckets[target_node], (buckets_index[target_node] + 1) * 100, MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
+        }
+        //MPI RECV
+        for (j = 0; j < num_process; j++)
+        {
+            int count = 0;
+            
+            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_status))
+            {
+                MPI_Get_count( &probe_status, MPI_BYTE, &count);
+                MPI_Recv(&final_distributed_records[final_index], count, MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
+            }
+        }
+    }
     
     ////////////////////////////////////////////
     //                                        //
@@ -251,6 +305,9 @@ int main(int argc, char* argv[]) {
     //                                        //
     ////////////////////////////////////////////
 
+    // sort final_distributed_records
+    
+    // write to disk
     
     /* shut down MPI */
     MPI_Finalize(); 
