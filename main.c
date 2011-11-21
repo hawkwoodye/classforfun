@@ -358,7 +358,6 @@ int main(int argc, char* argv[]) {
     
     struct element  temp_record;
     char            temp_key;
-    long            temp_bucket_index;
     int             target_node;
     int             probe_flag = 0;
   
@@ -379,11 +378,11 @@ int main(int argc, char* argv[]) {
         
         temp_bucket_index = buckets_index[target_node];
         
-        sending_buckets[target_node][temp_bucket_index] = temp_record;
+        sending_buckets[target_node][buckets_index[target_node]] = temp_record;
         buckets_index[target_node]++;
         
         // when one bucket is full send it and memset to zero
-        if(buckets_index[target_node] == bucket_element_count)
+        if(buckets_index[target_node] == (bucket_element_count+1))
         {
             // MPI SEND
             MPI_Send(sending_buckets[target_node], (bucket_element_count * 100), MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
@@ -399,7 +398,7 @@ int main(int argc, char* argv[]) {
         {
             printf("Start sending!!\n");
             //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
-            MPI_Send(sending_buckets[target_node], (buckets_index[target_node]) * 100, MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
+            MPI_Send(sending_buckets[target_node], (buckets_index[target_node]-1) * 100, MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
         }
     }
   
