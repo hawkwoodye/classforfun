@@ -157,6 +157,40 @@ void quickSort(struct element data[], long left, long right)
         quickSort(data, ptr + 1, right);
 }
 
+void * background_probe_recv(void * parm)
+{
+    printf("thread runnning!\n");
+    struct parm_recv * input_parms = (struct parm_recv *)parm;
+    
+    MPI_Status temp_status = input_parms->_status;
+    struct element * temp_recv_buffer;
+    temp_recv_buffer = input_parms->_recv_buffer;
+    struct program_information temp_prog_info = input_parms->_prog_info;
+    long * temp_final_index;
+    temp_final_index = input_parms->_final_index;
+
+    int temp_count = 0;
+    int flag = 0;
+    
+    // MPI RECV
+    while(!flag)
+    {
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &temp_status);
+        if(flag)
+        {
+            printf("probed!!!\n");
+            MPI_Get_count(&temp_status, MPI_BYTE, &temp_count);
+            *temp_final_index = *temp_final_index + temp_count;
+            printf("Receving from %ld! temp count is %d\n", *temp_final_index, temp_count);
+            MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, temp_status.MPI_SOURCE, MPI_COMM_WORLD, &temp_status);
+            if(*temp_final_index == temp_prog_info.element_count - 1)
+            {
+                flag = 1;
+            }else{flag = 0;}
+        }
+    }
+    return NULL;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -169,6 +203,7 @@ int main(int argc, char* argv[]) {
     // MPI Initialization
     MPI_Status status ;   /* return status for receive */
     MPI_Status probe_status;    /* return status for probe */
+    MPI_Request request;
    
     /* start up MPI */
     MPI_Init(&argc, &argv);
@@ -187,7 +222,7 @@ int main(int argc, char* argv[]) {
     
     sprintf(gensort_fname, "partition.%d", my_rank);
     sprintf(arg_bN, " -b%d", (my_rank*1000));
-    sprintf(arg_NUMRECS, " %d ", (my_rank*1000 + 1000));
+    sprintf(arg_NUMRECS, " %d ", (1000));
 
     
     // CAUTION!!!
@@ -224,7 +259,7 @@ int main(int argc, char* argv[]) {
     
     prog_info.element_count = (long) prog_info.input_file_size / prog_info.element_byte_size;
     
-    printf("Input File Name : %s\n", prog_info.input_file_name);
+    printf("Rank %d Input File Name : %s\n", my_rank, prog_info.input_file_name);
     printf("Element Count   : %ld\n", prog_info.element_count);
     
     ////////////////////////////////////////////
@@ -247,12 +282,12 @@ int main(int argc, char* argv[]) {
     struct element * records_per_buffer;
     long readbuffer_size;                   // in bytes
     
-    // read buffer malloc
-    records_per_buffer = (struct element *)malloc(readbuffer_size);
-    
     // temporary set to the whole file will be changed to buffer size...
     // ...
     readbuffer_size = prog_info.input_file_size;
+    
+    // read buffer malloc
+    records_per_buffer = (struct element *)malloc(readbuffer_size);
     
     file_ptr = fopen(prog_info.input_file_name, "rb");
     
@@ -262,7 +297,7 @@ int main(int argc, char* argv[]) {
     if(file_ptr == NULL)
         print_usage_error_exit("File open error!\n");
 
-    if(fseek(file_ptr, 0L, SEEK_SET) != 0)
+    if(fseek(file_ptr, 0, SEEK_SET) != 0)
         print_usage_error_exit("Unable to seek input file!");
     
     if(fread(records_per_buffer, 1, readbuffer_size, file_ptr) != readbuffer_size)
@@ -271,7 +306,8 @@ int main(int argc, char* argv[]) {
     }
     
     fclose(file_ptr);
-     
+    
+    
     ////////////////////////////////////////////
     //                                        //
     //    STEP 2: Distribute (Communication)  //
@@ -285,19 +321,33 @@ int main(int argc, char* argv[]) {
     // Double Buffering will be added in
     // ...
     //
-    
+   
     // buffers for sending
     struct element *    sending_buckets[num_process];
     long                buckets_index[num_process];
     // buffer for receiving
     struct element *    final_distributed_records;
-    long                final_index;
+    final_distributed_records = (struct element *)malloc(prog_info.input_file_size);
     
     // bucket size in count of element, will be changed later, right now it is the total element count, which will not be reached
     long                bucket_element_count;
     
-    bucket_element_count = prog_info.element_count ;
+    // Start Receiving Thread keep running until receive all~
+    long * final_index;
+    final_index = (long*)malloc(sizeof(long));
+    *final_index = 0;
+    struct parm_recv thread_recv_parm;
     
+    thread_recv_parm._status = probe_status;
+    thread_recv_parm._recv_buffer = final_distributed_records;
+    thread_recv_parm._prog_info = prog_info;
+    thread_recv_parm._final_index = final_index;
+    
+    pthread_t   recv_thread;
+    pthread_create(&recv_thread, NULL, background_probe_recv, (void*)&thread_recv_parm);
+    
+    bucket_element_count = prog_info.element_count ;
+      
     for(i = 0; i < num_process; i++)
     {
         sending_buckets[i] = (struct element *)malloc(bucket_element_count * prog_info.element_byte_size );
@@ -310,14 +360,23 @@ int main(int argc, char* argv[]) {
     char            temp_key;
     long            temp_bucket_index;
     int             target_node;
-    int             probe_flag;
-    
+    int             probe_flag = 0;
+  
     for(i = 0; i < prog_info.element_count; i++)
     {
         temp_record = records_per_buffer[i];
         temp_key = temp_record.e[0];
-        target_node = (int)temp_key;
-        target_node = target_node / num_process;
+        target_node = (int)temp_key + 128;
+        target_node = target_node / (256 / num_process);
+        /*
+        printf("Rank %d: key is %c or %d\n", my_rank, temp_key, target_node);
+        if(target_node == num_process)
+        {
+            printf("!ERROR !\n");
+            break;
+        }
+        */
+        
         temp_bucket_index = buckets_index[target_node];
         
         sending_buckets[target_node][temp_bucket_index] = temp_record;
@@ -330,37 +389,20 @@ int main(int argc, char* argv[]) {
             MPI_Send(sending_buckets[target_node], (bucket_element_count * 100), MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
             buckets_index[target_node] = 0;
         }
-        // MPI RECV
-        for (j = 0; j < num_process; j++) {
-            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_flag, &probe_status))
-            {
-                MPI_Recv(&final_distributed_records[final_index], (bucket_element_count * 100), MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
-                final_index = final_index + bucket_element_count;
-            }
-        }
     }
+
     
     // last time send those unfilled buckects
     for(i = 0; i < num_process; i++)
     {
-        if(buckets_index[i]!=0)
+        if(buckets_index[i] != 0)
         {
+            printf("Start sending!!\n");
             //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
-            MPI_Send(sending_buckets[target_node], (buckets_index[target_node] + 1) * 100, MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
-        }
-        //MPI RECV
-        for (j = 0; j < num_process; j++)
-        {
-            int count = 0;
-            
-            if(MPI_Iprobe(j, j, MPI_COMM_WORLD, &probe_flag, &probe_status))
-            {
-                MPI_Get_count( &probe_status, MPI_BYTE, &count);
-                MPI_Recv(&final_distributed_records[final_index], count, MPI_BYTE, j, j, MPI_COMM_WORLD, &status);
-            }
+            MPI_Send(sending_buckets[target_node], (buckets_index[target_node]) * 100, MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
         }
     }
-    
+  
     ////////////////////////////////////////////
     //                                        //
     //    STEP 3: Sort and Write to file      //
@@ -379,18 +421,19 @@ int main(int argc, char* argv[]) {
     char output_file_name[57]="./sorted_";
     strcat(output_file_name, gensort_fname);
     
-    /* open the file we are writing to */
+    // open the file we are writing to 
     if(!(outFile = fopen(output_file_name, "wb")))
     {
         print_usage_error_exit("File writing error!\n");
     }
     
-    /* use fwrite to write binary data to the file */
+    // use fwrite to write binary data to the file 
     fwrite(final_distributed_records, prog_info.input_file_size , 1, outFile);
     
     fclose(outFile);
-    
-    /* shut down MPI */
+
+    pthread_join(recv_thread, NULL);
+    // shut down MPI 
     MPI_Finalize(); 
     return (EXIT_SUCCESS);
 }

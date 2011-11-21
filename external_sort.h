@@ -5,6 +5,8 @@
  * Created on November 14, 2011, 10:52 AM
  */
 
+#include <mpi.h>
+
 #ifndef EXTERNAL_SORT_H
 #define	EXTERNAL_SORT_H
 
@@ -62,28 +64,12 @@ struct sort_buffer
     struct element *e;
 };
 
-struct read_pthread_args
+struct parm_recv
 {
-    
-};
-
-struct write_pthread_args
-{
-    
-};
-
-struct distribute_pthread_args
-{
-
-};
-
-struct send_pthread_args
-{
-};
-
-struct receive_pthread_args
-{
-
+    MPI_Status _status;
+    struct element * _recv_buffer;
+    struct program_information _prog_info;
+    long * _final_index;
 };
 
 #endif	/* EXTERNAL_SORT_H */
