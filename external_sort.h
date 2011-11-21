@@ -66,6 +66,7 @@ struct sort_buffer
 
 struct parm_recv
 {
+    int _my_process;
     MPI_Status _status;
     struct element * _recv_buffer;
     struct program_information _prog_info;

@@ -160,34 +160,44 @@ void quickSort(struct element data[], long left, long right)
 void * background_probe_recv(void * parm)
 {
     printf("thread runnning!\n");
-    struct parm_recv * input_parms = (struct parm_recv *)parm;
     
+    struct parm_recv * input_parms = (struct parm_recv *)parm;
+    //MPI_Request temp_request;
     MPI_Status temp_status = input_parms->_status;
     struct element * temp_recv_buffer;
     temp_recv_buffer = input_parms->_recv_buffer;
     struct program_information temp_prog_info = input_parms->_prog_info;
     long * temp_final_index;
     temp_final_index = input_parms->_final_index;
+    int my_process = input_parms->_my_process;
 
     int temp_count = 0;
     int flag = 0;
     
+    
     // MPI RECV
     while(!flag)
     {
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &temp_status);
+        /*
+        MPI_Iprobe(MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &flag, &temp_status);
         if(flag)
         {
             printf("probed!!!\n");
             MPI_Get_count(&temp_status, MPI_BYTE, &temp_count);
-            *temp_final_index = *temp_final_index + temp_count;
             printf("Receving from %ld! temp count is %d\n", *temp_final_index, temp_count);
-            MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, temp_status.MPI_SOURCE, MPI_COMM_WORLD, &temp_status);
-            if(*temp_final_index == temp_prog_info.element_count)
-            {
-                flag = 1;
-            }else{flag = 0;}
+            *temp_final_index = *temp_final_index + temp_count;
+            MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
         }
+         */
+
+        MPI_Recv(temp_recv_buffer, temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
+        MPI_Get_count( &temp_status,  MPI_BYTE, &temp_count );
+        if(*temp_final_index == temp_prog_info.element_count)
+        {
+            flag = 1;
+        }else{flag = 0;}
+        
+         
     }
     return NULL;
 }
@@ -342,6 +352,7 @@ int main(int argc, char* argv[]) {
     thread_recv_parm._recv_buffer = final_distributed_records;
     thread_recv_parm._prog_info = prog_info;
     thread_recv_parm._final_index = final_index;
+    thread_recv_parm._my_process = my_rank;
     
     pthread_t   recv_thread;
     pthread_create(&recv_thread, NULL, background_probe_recv, (void*)&thread_recv_parm);
@@ -383,7 +394,7 @@ int main(int argc, char* argv[]) {
         if(buckets_index[target_node] == bucket_element_count)
         {
             // MPI SEND
-            MPI_Send(sending_buckets[target_node], (buckets_index[target_node] * 100), MPI_BYTE, target_node, my_rank, MPI_COMM_WORLD); 
+            MPI_Send(sending_buckets[target_node], (buckets_index[target_node] * 100), MPI_BYTE, target_node, target_node, MPI_COMM_WORLD); 
             buckets_index[target_node] = 0;
         }
     }
@@ -396,7 +407,7 @@ int main(int argc, char* argv[]) {
         {
             printf("Start sending!!\n");
             //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
-            MPI_Send(sending_buckets[i], (buckets_index[i]) * 100, MPI_BYTE, i, my_rank, MPI_COMM_WORLD); 
+            MPI_Send(sending_buckets[i], (buckets_index[i]) * 100, MPI_BYTE, i, i, MPI_COMM_WORLD); 
         }
     }
   
