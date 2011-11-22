@@ -159,7 +159,7 @@ void quickSort(struct element data[], long left, long right)
 
 void * background_probe_recv(void * parm)
 {
-    printf("thread runnning!\n");
+    printf("recv thread starting!\n");
     
     struct parm_recv * input_parms = (struct parm_recv *)parm;
     //MPI_Request temp_request;
@@ -173,11 +173,12 @@ void * background_probe_recv(void * parm)
 
     int temp_count = 0;
     int flag = 0;
-    
+    int recv_count = 0; 
     
     // MPI RECV
     while(!flag)
     {
+	printf("Rank %d, entering while loop...\n", my_process);
         /*
         MPI_Iprobe(MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &flag, &temp_status);
         if(flag)
@@ -189,19 +190,22 @@ void * background_probe_recv(void * parm)
             MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
         }
          */
-
-        MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
-        printf("Received!\n");
+        MPI_Recv(&temp_recv_buffer[*temp_final_index/100], temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
+        printf("Rank %d, received from %d!\n",my_process,temp_status.MPI_SOURCE);
         MPI_Get_count( &temp_status,  MPI_BYTE, &temp_count );
         *temp_final_index = *temp_final_index + temp_count;
-        printf("Received %d records!\n", temp_count);
-        if(*temp_final_index == temp_prog_info.element_count)
+        printf("Received %d bytes!\n", temp_count);
+	recv_count++;
+//        if(*temp_final_index/100 == temp_prog_info.element_count)
+	if (recv_count == 4)
         {
             flag = 1;
-        }else{flag = 0;}
+        }
+	else{flag = 0;}
         
-         
+        printf("Rank %d, end of while loop.\n",my_process);  
     }
+    printf("Recv thread terminating...\n");
     return NULL;
 }
 
@@ -242,7 +246,7 @@ int main(int argc, char* argv[]) {
     // CAUTION!!!
     // CAUTION!!!
 
-    strcpy(system_call, "/Users/hawkwoodye/NetBeansProjects/gensort-1.4/gensort ");
+    strcpy(system_call, "/gpfs_share/csc548/eshen/project/64/gensort ");
     strcat(system_call, arg_bN);
     strcat(system_call, arg_NUMRECS);
     strcat(system_call, gensort_fname);
@@ -340,7 +344,7 @@ int main(int argc, char* argv[]) {
     long                buckets_index[num_process];
     // buffer for receiving
     struct element *    final_distributed_records;
-    final_distributed_records = (struct element *)malloc(prog_info.input_file_size);
+    final_distributed_records = (struct element *)malloc(prog_info.input_file_size*2);
     
     // bucket size in count of element, will be changed later, right now it is the total element count, which will not be reached
     long                bucket_element_count;
@@ -408,7 +412,7 @@ int main(int argc, char* argv[]) {
     {
         if(buckets_index[i] != 0)
         {
-            printf("Start sending!!\n");
+            printf("Rank %d sending %d bytes to %d..\n",my_rank,buckets_index[i]*100,i);
             //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
             MPI_Send(sending_buckets[i], (buckets_index[i]) * 100, MPI_BYTE, i, i, MPI_COMM_WORLD); 
         }
@@ -421,8 +425,10 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////
 
     //Barrier()
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
     
+    pthread_join(recv_thread, NULL);
+    printf("Rank %d, start sorting...\n",my_rank);
     // sort final_distributed_records
     quickSort(final_distributed_records, 0, (prog_info.element_count - 1) );
     
@@ -442,8 +448,7 @@ int main(int argc, char* argv[]) {
     fwrite(final_distributed_records, prog_info.input_file_size , 1, outFile);
     
     fclose(outFile);
-
-    pthread_join(recv_thread, NULL);
+    printf("done!\n");
     // shut down MPI 
     MPI_Finalize(); 
     return (EXIT_SUCCESS);
