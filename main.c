@@ -190,8 +190,11 @@ void * background_probe_recv(void * parm)
         }
          */
 
-        MPI_Recv(temp_recv_buffer, temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
+        MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
+        printf("Received!\n");
         MPI_Get_count( &temp_status,  MPI_BYTE, &temp_count );
+        *temp_final_index = *temp_final_index + temp_count;
+        printf("Received %d records!\n", temp_count);
         if(*temp_final_index == temp_prog_info.element_count)
         {
             flag = 1;
