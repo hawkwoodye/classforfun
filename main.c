@@ -159,7 +159,6 @@ void quickSort(struct element data[], long left, long right)
 
 int tag_checking(int * tags, int np)
 {
-<<<<<<< HEAD
     int i, r;
     r = 1;
     for( i = 0; i< np; i++)
@@ -179,9 +178,6 @@ int tag_checking(int * tags, int np)
 
 void * background_probe_recv(void * parm)
 {    
-=======
-    printf("thread runnning!\n");
->>>>>>> parent of 4a45ff3... 
     
     struct parm_recv * input_parms = (struct parm_recv *)parm;
  
@@ -197,23 +193,16 @@ void * background_probe_recv(void * parm)
     temp_final_index = input_parms->_final_index;
 
     int flag = 0;
-<<<<<<< HEAD
     int temp_count = 0;
     int _my_process = input_parms->_my_process;
     int tags[temp_prog_info.number_of_process];
-=======
+        
     
->>>>>>> parent of 4a45ff3... 
     
     // MPI RECV
     while(!flag)
     {
-<<<<<<< HEAD
-	printf("Rank %d, entering while loop...\n", my_process);
-=======
-        /*
-        MPI_Iprobe(MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &flag, &temp_status);
->>>>>>> parent of 4a45ff3... 
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &temp_status);
         if(flag)
         {
             if(temp_status.MPI_TAG == 255)
@@ -232,35 +221,23 @@ void * background_probe_recv(void * parm)
             }
             //printf("probed tag=%d!!!\n",temp_status.MPI_TAG);
             MPI_Get_count(&temp_status, MPI_BYTE, &temp_count);
-<<<<<<< HEAD
             //printf("Process %d Receving %ld! temp count is %d\n", _my_process, *temp_final_index, temp_count);
             *temp_final_index = *temp_final_index + temp_count/100;
             MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, temp_status.MPI_TAG, MPI_COMM_WORLD, &temp_status);
             flag=0;
             
         }
-    }
-    printf("%d receive done!\n", _my_process);
-=======
-            printf("Receving from %ld! temp count is %d\n", *temp_final_index, temp_count);
-            *temp_final_index = *temp_final_index + temp_count;
-            MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_count, MPI_BYTE, temp_status.MPI_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
-        }
-         */
-
+        
+        /*
         MPI_Recv(&temp_recv_buffer[*temp_final_index], temp_prog_info.input_file_size , MPI_BYTE, MPI_ANY_SOURCE, my_process, MPI_COMM_WORLD, &temp_status);
         printf("Received!\n");
         MPI_Get_count( &temp_status,  MPI_BYTE, &temp_count );
         *temp_final_index = *temp_final_index + temp_count;
         printf("Received %d records!\n", temp_count);
-        if(*temp_final_index == temp_prog_info.element_count)
-        {
-            flag = 1;
-        }else{flag = 0;}
-        
+        */
          
     }
->>>>>>> parent of 4a45ff3... 
+    printf("%d receive done!\n", _my_process);
     return NULL;
 }
 
@@ -400,12 +377,7 @@ int main(int argc, char* argv[]) {
     long                buckets_index[num_process];
     // buffer for receiving
     struct element *    final_distributed_records;
-<<<<<<< HEAD
-
     final_distributed_records = (struct element *)malloc(2 * prog_info.input_file_size);
-=======
-    final_distributed_records = (struct element *)malloc(prog_info.input_file_size);
->>>>>>> parent of 4a45ff3... 
     
     // bucket size in count of element, will be changed later, right now it is the total element count, which will not be reached
     long                bucket_element_count;
@@ -474,10 +446,7 @@ int main(int argc, char* argv[]) {
     {
         if(buckets_index[i] != 0)
         {
-<<<<<<< HEAD
-=======
-            printf("Start sending!!\n");
->>>>>>> parent of 4a45ff3... 
+            printf("Start sending: %ld -> %d!!\n", buckets_index[i]*100, i);
             //MPI SEND !!CAUTION!! only send (buckets_index[i] + 1) elements
             MPI_Send(sending_buckets[i], (buckets_index[i]) * 100, MPI_BYTE, i, i, MPI_COMM_WORLD); 
         }
@@ -496,15 +465,8 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////
 
     //Barrier()
-<<<<<<< HEAD
-
     MPI_Barrier(MPI_COMM_WORLD);
-    pthread_join(recv_thread, NULL);
 
-=======
-    MPI_Barrier(MPI_COMM_WORLD);
-    
->>>>>>> parent of 4a45ff3... 
     // sort final_distributed_records
     quickSort(final_distributed_records, 0, (prog_info.element_count - 1) );
     
@@ -524,13 +486,14 @@ int main(int argc, char* argv[]) {
     fwrite(final_distributed_records, prog_info.input_file_size , 1, outFile);
     
     fclose(outFile);
-<<<<<<< HEAD
+
     
     ////////////////////////////////////////////
     //                                        //
     //    STEP 4: Garbage Collection          //
     //                                        //
     ////////////////////////////////////////////
+    pthread_join(recv_thread, NULL);
     
     free(final_distributed_records);
     free(final_index);
@@ -540,10 +503,6 @@ int main(int argc, char* argv[]) {
     }
     free(records_per_buffer);
     
-=======
-
-    pthread_join(recv_thread, NULL);
->>>>>>> parent of 4a45ff3... 
     // shut down MPI 
     MPI_Finalize(); 
     return (EXIT_SUCCESS);
