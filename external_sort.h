@@ -23,6 +23,7 @@ struct program_information
 {
     char        input_file_name[50];      // input file name
     long        input_file_size;           // input file size in bytes
+    int         number_of_process;
     
     int         element_byte_size;      // 100 bytes
     long        element_count;
