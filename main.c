@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include <pthread.h>
+#include <pthread.h> 
 #include <mpi.h>
 #include <string.h>
 #include "external_sort.h"
